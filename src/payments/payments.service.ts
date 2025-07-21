@@ -1,21 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SendPushNotificationDto, CancelPushNotificationDto, ReverseTransactionDto } from './dto/send-push.dto';
 import axios from 'axios';
-import { AuthService } from '../auth/auth.service';
+import { ParametrosService } from '../common/parametros.service';
+import { ImplementacionNequi } from '../common/enums'
+import { HttpHeadersService  } from '../common/services/http-headers.service';
 
 @Injectable()
 export class PaymentsService {
-  private readonly logger = new Logger(AuthService.name);
-  constructor(private readonly authService: AuthService) {}
-
-  private async getHeaders(): Promise<any> {
-    const token = await this.authService.getToken();
-    return {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.NEQUI_API_KEY,
-      Authorization: `Bearer ${token}`,
-    };
-  }
+  private readonly logger = new Logger(PaymentsService.name);
+  constructor(
+    private readonly parametrosService: ParametrosService,
+    private readonly httpHeadersService: HttpHeadersService
+  ) {}
 
   async sendPushNotification(dto: SendPushNotificationDto): Promise<any> {
     this.logger.verbose('Sending push notification to NEQUI');
@@ -48,10 +44,12 @@ export class PaymentsService {
         },
       },
     };
-
-    const url =  process.env.NEQUI_API_BASE_PATH! + process.env.NEQUI_UNREGISTERED_PAYMENT_URL!;
-    const headers = await this.getHeaders();
-
+    const basePath = await this.parametrosService.obtenerValorParametro(ImplementacionNequi.NEQUI_UNREGISTERED_PAYMENT_URL);
+    if (!basePath) {
+      throw new Error('[sendPushNotification] No se pudo obtener la basePath o paymentUrl de NEQUI.');
+    }
+    const url = basePath;
+    const headers = await this.httpHeadersService.getHeaders();
     if (!headers || !headers.Authorization || (url === null || url === undefined || url === '')  || (headers["x-api-key"] === null || headers["x-api-key"] === undefined || headers["x-api-key"] === '') ) {
       throw new Error('[sendPushNotification] No se pudo obtener el token de autenticación o la URL de NEQUI no está definida.');
     }
@@ -97,8 +95,8 @@ export class PaymentsService {
     this.logger.verbose(`>> ${JSON.stringify(transactionId)}`);
     this.logger.verbose(`>> ${JSON.stringify(phoneNumber)}`);
         
-    const url = `${process.env.NEQUI_API_BASE_PATH}/payments/v2/-services-paymentservice-cancelunregisteredpayment`;
-    const headers = await this.getHeaders();
+    const url = `${await this.parametrosService.obtenerValorParametro(ImplementacionNequi.NEQUI_CANCEL_PAYMENT_URL)}`;
+    const headers = await this.httpHeadersService.getHeaders();
     if (!headers || !headers.Authorization || (url === null || url === undefined || url === '')  || (headers["x-api-key"] === null || headers["x-api-key"] === undefined || headers["x-api-key"] === '') ) {
       throw new Error('[sendPushNotification] No se pudo obtener el token de autenticación o la URL de NEQUI no está definida.');
     }
@@ -169,8 +167,8 @@ export class PaymentsService {
     const { transactionId } = codeQR;
 
     this.logger.verbose(`Consultando estado de pago: ${JSON.stringify(transactionId)}`);
-    const url =  `${process.env.NEQUI_API_BASE_PATH}/payments/v2/-services-paymentservice-getstatuspayment`;
-    const headers = await this.getHeaders();
+    const url =  `${await this.parametrosService.obtenerValorParametro(ImplementacionNequi.NEQUI_STATUS_PAYMENT_URL)}`;
+    const headers = await this.httpHeadersService.getHeaders();
     if (!headers || !headers.Authorization || (url === null || url === undefined || url === '')  || (headers["x-api-key"] === null || headers["x-api-key"] === undefined || headers["x-api-key"] === '') ) {
       throw new Error('[sendPushNotification] No se pudo obtener el token de autenticación o la URL de NEQUI no está definida.');
     }
@@ -217,8 +215,8 @@ export class PaymentsService {
     this.logger.verbose(`>> ${JSON.stringify(messageId)}`);
     this.logger.verbose(`>> ${JSON.stringify(phoneNumber)}`);
     this.logger.verbose(`>> ${JSON.stringify(value)}`);
-    const url = `${process.env.NEQUI_API_BASE_PATH}/payments/v2/-services-reverseservices-reversetransaction`;
-    const headers = await this.getHeaders();
+    const url = `${await this.parametrosService.obtenerValorParametro(ImplementacionNequi.NEQUI_REVERSE_PAYMENT_URL)}`;
+    const headers = await this.httpHeadersService.getHeaders();
     if (!headers || !headers.Authorization || (url === null || url === undefined || url === '')  || (headers["x-api-key"] === null || headers["x-api-key"] === undefined || headers["x-api-key"] === '') ) {
       throw new Error('[sendPushNotification] No se pudo obtener el token de autenticación o la URL de NEQUI no está definida.');
     }
