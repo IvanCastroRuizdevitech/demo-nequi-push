@@ -37,7 +37,7 @@ export class PaymentsServiceEnhanced {
       environment: process.env.NODE_ENV || 'production'
     };
 
-    let logId: number;
+    let logId: number = 0;
     
     try {
       // Crear el payload de la solicitud
@@ -145,7 +145,7 @@ export class PaymentsServiceEnhanced {
       const processingTime = Date.now() - startTime;
       
       // Actualizar el log con el error
-      if (logId) {
+      if (logId || logId !== 0) {
         await this.transactionLogService.updateTransactionLog(logId, {
           status: 'FAILED',
           errorMessage: error.message,
@@ -192,7 +192,7 @@ export class PaymentsServiceEnhanced {
       environment: process.env.NODE_ENV || 'production'
     };
 
-    let logId: number;
+    let logId: number = 0;
 
     try {
       const url = `${await this.parametrosService.obtenerValorParametro(ImplementacionNequi.NEQUI_CANCEL_PAYMENT_URL)}`;
@@ -289,7 +289,7 @@ export class PaymentsServiceEnhanced {
     } catch (error) {
       const processingTime = Date.now() - startTime;
       
-      if (logId) {
+      if (logId || logId !== 0) {
         await this.transactionLogService.updateTransactionLog(logId, {
           status: 'FAILED',
           errorMessage: error.message,
@@ -318,7 +318,7 @@ export class PaymentsServiceEnhanced {
       environment: process.env.NODE_ENV || 'production'
     };
 
-    let logId: number;
+    let logId: number = 0;
 
     try {
       const url = `${await this.parametrosService.obtenerValorParametro(ImplementacionNequi.NEQUI_STATUS_PAYMENT_URL)}`;
@@ -374,7 +374,7 @@ export class PaymentsServiceEnhanced {
     } catch (error) {
       const processingTime = Date.now() - startTime;
       
-      if (logId) {
+      if (logId || logId !== 0) {
         await this.transactionLogService.updateTransactionLog(logId, {
           status: 'FAILED',
           errorMessage: error.message,
@@ -420,7 +420,7 @@ export class PaymentsServiceEnhanced {
       environment: process.env.NODE_ENV || 'production'
     };
 
-    let logId: number;
+    let logId: number = 0;
 
     try {
       const url = `${await this.parametrosService.obtenerValorParametro(ImplementacionNequi.NEQUI_REVERSE_PAYMENT_URL)}`;
@@ -516,7 +516,7 @@ export class PaymentsServiceEnhanced {
     } catch (error) {
       const processingTime = Date.now() - startTime;
       
-      if (logId) {
+      if (logId || logId !== 0) {
         await this.transactionLogService.updateTransactionLog(logId, {
           status: 'FAILED',
           errorMessage: error.message,

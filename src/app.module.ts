@@ -3,6 +3,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { PaymentsModule } from './payments/payments.module';
+import { PaymentsModuleEnhanced } from './payments/payments.module.enhanced';
 import { DatabaseModule } from './database/database.module';
 import { PaymentsQrModule } from './payments-qr/payments-qr.module';
 
@@ -10,6 +11,7 @@ import { PaymentsQrModule } from './payments-qr/payments-qr.module';
   imports: [
               AuthModule, 
               PaymentsModule,
+              PaymentsModuleEnhanced,
               DatabaseModule,
               PaymentsQrModule 
     ],

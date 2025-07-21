@@ -8,7 +8,7 @@ export interface TransactionLogEntry {
   internalReference?: string;
   operationType: 'SEND_PUSH' | 'CANCEL_PUSH' | 'GET_STATUS' | 'REVERSE';
   phoneNumber?: string;
-  amount?: number;
+  amount?: string;
   currency?: string;
   status: 'PENDING' | 'SUCCESS' | 'FAILED' | 'CANCELLED' | 'REVERSED' | 'TIMEOUT';
   nequiStatusCode?: string;
@@ -120,8 +120,8 @@ export class TransactionLogService {
     const startTime = Date.now();
 
     try {
-      const setClause = [];
-      const values = [];
+      const setClause: any[] = [];
+      const values: any[] = [];
       let paramIndex = 1;
 
       // Construir dinámicamente la consulta UPDATE
@@ -216,7 +216,7 @@ export class TransactionLogService {
         SELECT * FROM transaction_tracking.transaction_log
         WHERE 1=1
       `;
-      const values = [];
+      const values: any[] = [];
       let paramIndex = 1;
 
       // Aplicar filtros
@@ -294,7 +294,7 @@ export class TransactionLogService {
         FROM transaction_tracking.transaction_log
         WHERE 1=1
       `;
-      const values = [];
+      const values: any[] = [];
       let paramIndex = 1;
 
       if (dateFrom) {
@@ -364,7 +364,7 @@ export class TransactionLogService {
       internalReference: row.internal_reference,
       operationType: row.operation_type,
       phoneNumber: row.phone_number,
-      amount: row.amount ? parseFloat(row.amount) : undefined,
+      amount: row.amount ? row.amount : undefined,
       currency: row.currency,
       status: row.status,
       nequiStatusCode: row.nequi_status_code,

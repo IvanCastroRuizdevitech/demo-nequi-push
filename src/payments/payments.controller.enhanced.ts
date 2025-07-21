@@ -3,7 +3,7 @@ import { PaymentsServiceEnhanced } from './payments.service.enhanced';
 import { SendPushNotificationDto, CancelPushNotificationDto, ReverseTransactionDto } from './dto/send-push.dto';
 import { Request } from 'express';
 
-@Controller('payments')
+@Controller('payments-enhanced')
 export class PaymentsControllerEnhanced {
   private readonly logger = new Logger(PaymentsControllerEnhanced.name);
 
