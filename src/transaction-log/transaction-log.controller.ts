@@ -1,7 +1,19 @@
-import { Controller, Get, Param, Query, ParseIntPipe, BadRequestException } from '@nestjs/common';
-import { TransactionLogService, TransactionLogFilter, TransactionLogEntry, TransactionStats } from './transaction-log.service';
+import {
+  Controller,
+  Get,
+  Param,
+  Query,
+  ParseIntPipe,
+  BadRequestException,
+} from '@nestjs/common';
+import {
+  TransactionLogService,
+  TransactionLogFilter,
+  TransactionLogEntry,
+  TransactionStats,
+} from './transaction-log.service';
 
-@Controller('api/transactions')
+@Controller('transactions')
 export class TransactionLogController {
   constructor(private readonly transactionLogService: TransactionLogService) {}
 
@@ -32,17 +44,35 @@ export class TransactionLogController {
 
       // Validar y asignar filtros
       if (status) {
-        const validStatuses = ['PENDING', 'SUCCESS', 'FAILED', 'CANCELLED', 'REVERSED', 'TIMEOUT'];
+        const validStatuses = [
+          'PENDING',
+          'SUCCESS',
+          'FAILED',
+          'CANCELLED',
+          'REVERSED',
+          'TIMEOUT',
+        ];
         if (!validStatuses.includes(status)) {
-          throw new BadRequestException(`Invalid status. Must be one of: ${validStatuses.join(', ')}`);
+          throw new BadRequestException(
+            `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
+          );
         }
         filter.status = status;
       }
 
       if (operationType) {
-        const validOperations = ['SEND_PUSH', 'CANCEL_PUSH', 'GET_STATUS', 'REVERSE'];
+        const validOperations = [
+          'SEND_PUSH',
+          'CANCEL_PUSH',
+          'GET_STATUS',
+          'REVERSE',
+        ];
         if (!validOperations.includes(operationType)) {
-          throw new BadRequestException(`Invalid operation type. Must be one of: ${validOperations.join(', ')}`);
+          throw new BadRequestException(
+            `Invalid operation type. Must be one of: ${validOperations.join(
+              ', ',
+            )}`,
+          );
         }
         filter.operationType = operationType;
       }
@@ -58,7 +88,9 @@ export class TransactionLogController {
       if (dateFrom) {
         const parsedDateFrom = new Date(dateFrom);
         if (isNaN(parsedDateFrom.getTime())) {
-          throw new BadRequestException('Invalid dateFrom format. Use ISO 8601 format.');
+          throw new BadRequestException(
+            'Invalid dateFrom format. Use ISO 8601 format.',
+          );
         }
         filter.dateFrom = parsedDateFrom;
       }
@@ -66,7 +98,9 @@ export class TransactionLogController {
       if (dateTo) {
         const parsedDateTo = new Date(dateTo);
         if (isNaN(parsedDateTo.getTime())) {
-          throw new BadRequestException('Invalid dateTo format. Use ISO 8601 format.');
+          throw new BadRequestException(
+            'Invalid dateTo format. Use ISO 8601 format.',
+          );
         }
         filter.dateTo = parsedDateTo;
       }
@@ -92,14 +126,16 @@ export class TransactionLogController {
         data,
         pagination: {
           limit: limitNum,
-          offset: offsetNum
-        }
+          offset: offsetNum,
+        },
       };
     } catch (error) {
       if (error instanceof BadRequestException) {
         throw error;
       }
-      throw new BadRequestException(`Error retrieving transactions: ${error.message}`);
+      throw new BadRequestException(
+        `Error retrieving transactions: ${error.message}`,
+      );
     }
   }
 
@@ -108,9 +144,13 @@ export class TransactionLogController {
    * GET /api/transactions/123
    */
   @Get(':id')
-  async getTransaction(@Param('id', ParseIntPipe) id: number): Promise<TransactionLogEntry> {
+  async getTransaction(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<TransactionLogEntry> {
     try {
-      const transaction = await this.transactionLogService.getTransactionLog(id);
+      const transaction = await this.transactionLogService.getTransactionLog(
+        id,
+      );
       if (!transaction) {
         throw new BadRequestException(`Transaction with ID ${id} not found`);
       }
@@ -119,7 +159,9 @@ export class TransactionLogController {
       if (error instanceof BadRequestException) {
         throw error;
       }
-      throw new BadRequestException(`Error retrieving transaction: ${error.message}`);
+      throw new BadRequestException(
+        `Error retrieving transaction: ${error.message}`,
+      );
     }
   }
 
@@ -140,9 +182,18 @@ export class TransactionLogController {
     };
   }> {
     try {
-      const validStatuses = ['PENDING', 'SUCCESS', 'FAILED', 'CANCELLED', 'REVERSED', 'TIMEOUT'];
+      const validStatuses = [
+        'PENDING',
+        'SUCCESS',
+        'FAILED',
+        'CANCELLED',
+        'REVERSED',
+        'TIMEOUT',
+      ];
       if (!validStatuses.includes(status)) {
-        throw new BadRequestException(`Invalid status. Must be one of: ${validStatuses.join(', ')}`);
+        throw new BadRequestException(
+          `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
+        );
       }
 
       const limitNum = limit ? parseInt(limit, 10) : 50;
@@ -159,7 +210,7 @@ export class TransactionLogController {
       const filter: TransactionLogFilter = {
         status,
         limit: limitNum,
-        offset: offsetNum
+        offset: offsetNum,
       };
 
       const data = await this.transactionLogService.getTransactionLogs(filter);
@@ -168,14 +219,16 @@ export class TransactionLogController {
         data,
         pagination: {
           limit: limitNum,
-          offset: offsetNum
-        }
+          offset: offsetNum,
+        },
       };
     } catch (error) {
       if (error instanceof BadRequestException) {
         throw error;
       }
-      throw new BadRequestException(`Error retrieving transactions by status: ${error.message}`);
+      throw new BadRequestException(
+        `Error retrieving transactions by status: ${error.message}`,
+      );
     }
   }
 
@@ -210,7 +263,7 @@ export class TransactionLogController {
       const filter: TransactionLogFilter = {
         phoneNumber: phone,
         limit: limitNum,
-        offset: offsetNum
+        offset: offsetNum,
       };
 
       const data = await this.transactionLogService.getTransactionLogs(filter);
@@ -219,14 +272,16 @@ export class TransactionLogController {
         data,
         pagination: {
           limit: limitNum,
-          offset: offsetNum
-        }
+          offset: offsetNum,
+        },
       };
     } catch (error) {
       if (error instanceof BadRequestException) {
         throw error;
       }
-      throw new BadRequestException(`Error retrieving transactions by phone: ${error.message}`);
+      throw new BadRequestException(
+        `Error retrieving transactions by phone: ${error.message}`,
+      );
     }
   }
 
@@ -246,23 +301,32 @@ export class TransactionLogController {
       if (dateFrom) {
         parsedDateFrom = new Date(dateFrom);
         if (isNaN(parsedDateFrom.getTime())) {
-          throw new BadRequestException('Invalid dateFrom format. Use ISO 8601 format.');
+          throw new BadRequestException(
+            'Invalid dateFrom format. Use ISO 8601 format.',
+          );
         }
       }
 
       if (dateTo) {
         parsedDateTo = new Date(dateTo);
         if (isNaN(parsedDateTo.getTime())) {
-          throw new BadRequestException('Invalid dateTo format. Use ISO 8601 format.');
+          throw new BadRequestException(
+            'Invalid dateTo format. Use ISO 8601 format.',
+          );
         }
       }
 
-      return await this.transactionLogService.getTransactionStats(parsedDateFrom, parsedDateTo);
+      return await this.transactionLogService.getTransactionStats(
+        parsedDateFrom,
+        parsedDateTo,
+      );
     } catch (error) {
       if (error instanceof BadRequestException) {
         throw error;
       }
-      throw new BadRequestException(`Error retrieving transaction stats: ${error.message}`);
+      throw new BadRequestException(
+        `Error retrieving transaction stats: ${error.message}`,
+      );
     }
   }
 
@@ -271,19 +335,27 @@ export class TransactionLogController {
    * GET /api/transactions/message/ABC123XYZ
    */
   @Get('message/:messageId')
-  async getTransactionByMessageId(@Param('messageId') messageId: string): Promise<TransactionLogEntry> {
+  async getTransactionByMessageId(
+    @Param('messageId') messageId: string,
+  ): Promise<TransactionLogEntry> {
     try {
-      const transaction = await this.transactionLogService.getTransactionLogByMessageId(messageId);
+      const transaction =
+        await this.transactionLogService.getTransactionLogByMessageId(
+          messageId,
+        );
       if (!transaction) {
-        throw new BadRequestException(`Transaction with message ID ${messageId} not found`);
+        throw new BadRequestException(
+          `Transaction with message ID ${messageId} not found`,
+        );
       }
       return transaction;
     } catch (error) {
       if (error instanceof BadRequestException) {
         throw error;
       }
-      throw new BadRequestException(`Error retrieving transaction by message ID: ${error.message}`);
+      throw new BadRequestException(
+        `Error retrieving transaction by message ID: ${error.message}`,
+      );
     }
   }
 }
-

@@ -1,30 +1,69 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { SendPushNotificationDto } from './dto/send-push.dto';
+import {
+  SendPushNotificationDto,
+  ReverseTransactionDto,
+} from './dto/send-push.dto';
 import axios from 'axios';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
 import { ParametrosService } from '../common/parametros.service';
-import { ImplementacionNequi } from '../common/enums'
-import { HttpHeadersService  } from '../common/services/http-headers.service';
-import { TransactionLogService, TransactionLogEntry } from '../transaction-log/transaction-log.service';
+import { ImplementacionNequi } from '../common/enums';
+import { HttpHeadersService } from '../common/services/http-headers.service';
+import {
+  TransactionLogService,
+  TransactionLogEntry,
+} from '../transaction-log/transaction-log.service';
+import { GenerateMessageId } from '../common/generate.message.id';
+import { ResponseHandler } from '../common/response.handler';
 
 @Injectable()
 export class PaymentsQrServiceEnhanced {
   private readonly logger = new Logger(PaymentsQrServiceEnhanced.name);
-  
+
   constructor(
-    private readonly httpService: HttpService,
     private readonly parametrosService: ParametrosService,
     private readonly httpHeadersService: HttpHeadersService,
-    private readonly transactionLogService: TransactionLogService
+    private readonly transactionLogService: TransactionLogService,
+    private readonly generateMessageId: GenerateMessageId,
   ) {}
 
-  async crearQr(dto: SendPushNotificationDto, clientIp?: string, userAgent?: string): Promise<any> {
-    const messageId = this.generateMessageId();
+  private async validateNequiConfig(urlKey: string) {
+    const headers = await this.httpHeadersService.getHeaders();
+    const url = await this.parametrosService.obtenerValorParametro(urlKey);
+    const timeout = await this.parametrosService.obtenerValorParametro(
+      ImplementacionNequi.NEQUI_TIMEUOT_CLOUD,
+    );
+    if (!url || !headers?.Authorization || !headers['x-api-key']) {
+      this.logger.error(`[postToNequi] URL o Headers inválidos para ${urlKey}`);
+      return ResponseHandler.error(
+        `Error: Configuración`,
+        `No se pudo obtener URL o token de NEQUI`,
+        400,
+      );
+    }
+    return { url, headers, timeout: timeout || 60000 };
+  }
+
+  async crearQr(
+    dto: SendPushNotificationDto,
+    clientIp?: string,
+    userAgent?: string,
+    stationCode?: string,
+    equipmentCode?: string,
+  ): Promise<any> {
+    const messageId = this.generateMessageId.generateMessageId(
+      stationCode,
+      equipmentCode,
+    );
     const startTime = Date.now();
-    
-    this.logger.verbose('Sending push notification QR to NEQUI #', dto.phoneNumber);
-    
+
+    this.logger.verbose(
+      'Sending push notification QR to NEQUI #',
+      dto.phoneNumber,
+      ' Station: ',
+      stationCode,
+      ' Equipment: ',
+      equipmentCode,
+    );
+
     // Crear registro inicial de transacción QR
     const logEntry: TransactionLogEntry = {
       messageId,
@@ -34,15 +73,15 @@ export class PaymentsQrServiceEnhanced {
       status: 'PENDING',
       clientIp,
       userAgent,
-      reference1: 'reference1',
-      reference2: 'reference2',
-      reference3: 'reference3',
+      reference1: stationCode,
+      reference2: equipmentCode,
+      reference3: messageId,
       environment: process.env.NODE_ENV || 'production',
-      internalReference: `QR_${messageId}` // Identificador específico para QR
+      internalReference: `QR_${messageId}`, // Identificador específico para QR
     };
 
-    let logId: number;
-    
+    let logId: number = 0;
+
     try {
       const payload = {
         RequestMessage: {
@@ -50,7 +89,10 @@ export class PaymentsQrServiceEnhanced {
             Channel: 'PQR03-C001',
             RequestDate: new Date().toISOString(),
             MessageID: messageId,
-            ClientID: '12345',
+            ClientID:
+              stationCode || equipmentCode
+                ? `${stationCode}-${equipmentCode}`
+                : '12345',
             Destination: {
               ServiceName: 'PaymentsService',
               ServiceOperation: 'generateCodeQR',
@@ -63,9 +105,9 @@ export class PaymentsQrServiceEnhanced {
               generateCodeQRRQ: {
                 code: 'NIT_1',
                 value: dto.value,
-                reference1: 'reference1',
-                reference2: 'reference2',
-                reference3: 'reference3',
+                reference1: stationCode,
+                reference2: equipmentCode,
+                reference3: messageId,
               },
             },
           },
@@ -73,95 +115,125 @@ export class PaymentsQrServiceEnhanced {
       };
 
       logEntry.requestPayload = payload;
-      
+
       // Registrar la transacción QR inicial
       logId = await this.transactionLogService.createTransactionLog(logEntry);
 
-      const basePath = await this.parametrosService.obtenerValorParametro(ImplementacionNequi.NEQUI_PAYMENTS_QR_URL);
-      if (!basePath) {
-        throw new Error('[crearQr] No se pudo obtener la basePath o paymenteUrlQr NEQUI.');
+      const config = await this.validateNequiConfig(
+        ImplementacionNequi.NEQUI_PAYMENTS_QR_URL,
+      );
+      if ('error' in config) {
+        return config;
       }
+      const { url, headers, timeout } = config;
 
-      const url = `${basePath}`;
-      const headers = await this.httpHeadersService.getHeaders();
-      
-      if (!headers || !headers.Authorization || (url === null || url === undefined || url === '') || (headers["x-api-key"] === null || headers["x-api-key"] === undefined || headers["x-api-key"] === '')) {
-        throw new Error('[crearQr] No se pudo obtener el token de autenticación o la URL de NEQUI no está definida.');
-      }
-
-      const response = await axios.post(url, payload, { headers });
+      const response = await axios.post(url, payload, {
+        headers,
+        timeout: +timeout,
+      });
       const processingTime = Date.now() - startTime;
-      
-      this.logger.debug('Response from QR NEQUI Sending: ' + JSON.stringify(response.data));
+
+      this.logger.debug(
+        'Response from QR NEQUI Sending: ' + JSON.stringify(response.data),
+      );
 
       if (!!response && response.status === 200 && response.data) {
         const { data } = response;
-        const {
-          StatusCode: statusCode = '',
-          StatusDesc: statusDesc = ''
-        } = data.ResponseMessage.ResponseHeader.Status;
+        const { StatusCode: statusCode = '', StatusDesc: statusDesc = '' } =
+          data.ResponseMessage.ResponseHeader.Status;
 
         // Actualizar el log con la respuesta
         const updateData: Partial<TransactionLogEntry> = {
           responsePayload: response.data,
           nequiStatusCode: statusCode,
           nequiStatusDescription: statusDesc,
-          processingTimeMs: processingTime
+          processingTimeMs: processingTime,
         };
 
-        if (statusCode === "0") {
-          const codeQR = data?.ResponseMessage?.ResponseBody?.any?.generateCodeQRRS?.qrValue || '';
-          
+        if (statusCode === '0') {
+          const codeQR =
+            data?.ResponseMessage?.ResponseBody?.any?.generateCodeQRRS
+              ?.qrValue || '';
+
           updateData.transactionId = codeQR; // Usamos el código QR como transaction ID
           updateData.status = 'SUCCESS';
 
           this.logger.debug(
-            'Código QR generado correctamente\n' +
-            `- Código QR -> ${codeQR}`
+            'Código QR generado correctamente\n' + `- Código QR -> ${codeQR}`,
           );
 
-          await this.transactionLogService.updateTransactionLog(logId, updateData);
-          return response.data;
-
+          await this.transactionLogService.updateTransactionLog(
+            logId,
+            updateData,
+          );
+          return ResponseHandler.success(response.data, 'Operación exitosa');
         } else {
           updateData.status = 'FAILED';
           updateData.errorMessage = `Error ${statusCode} = ${statusDesc}`;
-          
-          await this.transactionLogService.updateTransactionLog(logId, updateData);
-          throw new Error(`Error ${statusCode} = ${statusDesc}`);
+
+          await this.transactionLogService.updateTransactionLog(
+            logId,
+            updateData,
+          );
+          return ResponseHandler.error(
+            `Error ${statusCode} = ${statusDesc}`,
+            'Unable to connect to Nequi, please check the information sent.',
+          );
         }
       } else {
         const updateData: Partial<TransactionLogEntry> = {
           status: 'FAILED',
-          errorMessage: 'Unable to connect to Nequi, please check the information sent.',
-          processingTimeMs: processingTime
+          errorMessage:
+            'Unable to connect to Nequi, please check the information sent.',
+          processingTimeMs: processingTime,
         };
-        
-        await this.transactionLogService.updateTransactionLog(logId, updateData);
-        throw new Error('Unable to connect to Nequi, please check the information sent.');
-      }
 
+        await this.transactionLogService.updateTransactionLog(
+          logId,
+          updateData,
+        );
+        return ResponseHandler.error(
+          `FAILED`,
+          'Unable to connect to Nequi, please check the information sent.',
+        );
+      }
     } catch (error) {
       const processingTime = Date.now() - startTime;
-      
+
       // Actualizar el log con el error
-      if (logId) {
+      if (logId || logId !== 0) {
         await this.transactionLogService.updateTransactionLog(logId, {
           status: 'FAILED',
           errorMessage: error.message,
-          processingTimeMs: processingTime
+          processingTimeMs: processingTime,
         });
       }
-      
-      throw new Error('No se pudo realizar la solicitud a QR NEQUI: ' + error.message);
+      return ResponseHandler.error(
+        error,
+        'No se pudo realizar la solicitud a QR NEQUI',
+        400,
+      );
     }
   }
 
-  async consultarEstadoQr(qrId: string, clientIp?: string, userAgent?: string): Promise<any> {
-    const messageId = this.generateMessageId();
+  async consultarEstadoQr(
+    qrId: string,
+    clientIp?: string,
+    userAgent?: string,
+    stationCode?: string,
+    equipmentCode?: string,
+  ): Promise<any> {
+    const messageId = this.generateMessageId.generateMessageId(
+      stationCode,
+      equipmentCode,
+    );
     const startTime = Date.now();
-    
-    this.logger.verbose(`Consultando estado de pago QR con ID: ${JSON.stringify(qrId)}`);
+
+    this.logger.verbose(
+      `Consultando estado de pago QR con ID: ${JSON.stringify(
+        qrId,
+      )} Station: ${stationCode}, Equipment: ${equipmentCode}`,
+    );
 
     // Crear registro de consulta de estado QR
     const logEntry: TransactionLogEntry = {
@@ -170,160 +242,249 @@ export class PaymentsQrServiceEnhanced {
       status: 'PENDING',
       clientIp,
       userAgent,
+      reference1: stationCode,
+      reference2: equipmentCode,
       environment: process.env.NODE_ENV || 'production',
-      internalReference: `QR_STATUS_${qrId}`
+      internalReference: `QR_STATUS_${qrId}`,
     };
 
-    let logId: number;
+    let logId: number = 0;
 
     try {
-      const url = await this.parametrosService.obtenerValorParametro(ImplementacionNequi.NEQUI_STATUS_PAYMENTS_QR_URL);
-      const headers = await this.httpHeadersService.getHeaders();
-      
-      if (!headers || !headers.Authorization || (url === null || url === undefined || url === '') || (headers["x-api-key"] === null || headers["x-api-key"] === undefined || headers["x-api-key"] === '')) {
-        throw new Error('[consultarEstadoQr] No se pudo obtener el token de autenticación o la URL de NEQUI no está definida.');
+      const config = await this.validateNequiConfig(
+        ImplementacionNequi.NEQUI_STATUS_PAYMENTS_QR_URL,
+      );
+      if ('error' in config) {
+        return config;
       }
+      const { url, headers, timeout } = config;
 
       // Crear el payload para la consulta de estado
       const requestPayload = {
         url: url,
         method: 'GET',
-        qrId: qrId
+        qrId: qrId,
       };
 
       logEntry.requestPayload = requestPayload;
-      
+
       // Registrar la consulta
       logId = await this.transactionLogService.createTransactionLog(logEntry);
 
-      const response = await firstValueFrom(
-        this.httpService.get(url, { headers })
-      );
-      
+      const response = await axios.post(url, {
+        headers,
+        timeout: +timeout,
+      });
       const processingTime = Date.now() - startTime;
 
       // Actualizar el log con la respuesta
       await this.transactionLogService.updateTransactionLog(logId, {
         responsePayload: response.data,
         status: 'SUCCESS',
-        processingTimeMs: processingTime
+        processingTimeMs: processingTime,
       });
-
-      return response.data;
-
+      return ResponseHandler.success(response.data, 'Operación exitosa');
     } catch (error) {
       const processingTime = Date.now() - startTime;
-      
-      if (logId) {
+
+      if (logId || logId !== 0) {
         await this.transactionLogService.updateTransactionLog(logId, {
           status: 'FAILED',
           errorMessage: error.message,
-          processingTimeMs: processingTime
+          processingTimeMs: processingTime,
         });
       }
-      
-      throw error;
+      return ResponseHandler.error(
+        error,
+        'No se pudo consultar el estado del QR',
+        400,
+      );
     }
   }
 
-  async cancelarQr(qrId: string, clientIp?: string, userAgent?: string): Promise<any> {
-    const messageId = this.generateMessageId();
+  async reverseTransaction(
+    dto: ReverseTransactionDto,
+    clientIp?: string,
+    userAgent?: string,
+    stationCode?: string,
+    equipmentCode?: string,
+  ): Promise<any> {
+    const { messageId: originalMessageId, phoneNumber, value } = dto;
+    const messageId = this.generateMessageId.generateMessageId(
+      stationCode,
+      equipmentCode,
+    );
     const startTime = Date.now();
-    
-    this.logger.verbose(`Cancelando código QR con ID: ${JSON.stringify(qrId)}`);
 
-    // Buscar la transacción QR original para establecer la relación padre-hijo
+    this.logger.verbose('Sending reverse QR pago to NEQUI');
+    this.logger.verbose(`>> ${JSON.stringify(originalMessageId)}`);
+    this.logger.verbose(`>> ${JSON.stringify(phoneNumber)}`);
+    this.logger.verbose(`>> ${JSON.stringify(value)}`);
+
+    // Buscar la transacción original
     let parentTransactionId: number | undefined;
     try {
-      const originalTransactions = await this.transactionLogService.getTransactionLogs({
-        transactionId: qrId,
-        operationType: 'SEND_PUSH'
-      });
-      if (originalTransactions.length > 0) {
-        parentTransactionId = originalTransactions[0].id;
+      const originalTransaction =
+        await this.transactionLogService.getTransactionLogByMessageId(
+          originalMessageId,
+        );
+      if (originalTransaction) {
+        parentTransactionId = originalTransaction.id;
       }
     } catch (error) {
-      this.logger.warn(`Could not find parent QR transaction for cancellation: ${error.message}`);
+      this.logger.warn(
+        `Could not find parent transaction for reversal: ${error.message}`,
+      );
+      return ResponseHandler.error(
+        error,
+        'Could not find parent transaction for reversal',
+        400,
+      );
     }
 
-    // Crear registro de cancelación QR
+    // Crear registro de reversión
     const logEntry: TransactionLogEntry = {
       messageId,
-      operationType: 'CANCEL_PUSH',
+      operationType: 'REVERSE',
+      phoneNumber,
+      amount: value,
       status: 'PENDING',
       clientIp,
       userAgent,
       parentTransactionId,
+      reference1: stationCode,
+      reference2: equipmentCode,
+      reference3: messageId,
       environment: process.env.NODE_ENV || 'production',
-      internalReference: `QR_CANCEL_${qrId}`
     };
 
-    let logId: number;
+    let logId: number = 0;
 
     try {
-      const url = await this.parametrosService.obtenerValorParametro(ImplementacionNequi.NEQUI_REVERSE_PAYMENTS_QR_URL);
-      const headers = await this.httpHeadersService.getHeaders();
-      
-      if (!headers || !headers.Authorization || (url === null || url === undefined || url === '') || (headers["x-api-key"] === null || headers["x-api-key"] === undefined || headers["x-api-key"] === '')) {
-        throw new Error('[cancelarQr] No se pudo obtener el token de autenticación o la URL de NEQUI no está definida.');
+      const config = await this.validateNequiConfig(
+        ImplementacionNequi.NEQUI_REVERSE_PAYMENT_URL,
+      );
+      if ('error' in config) {
+        return config;
       }
+      const { url, headers, timeout } = config;
 
-      const requestPayload = {
-        url: url,
-        method: 'POST',
-        qrId: qrId
+      const body = {
+        RequestMessage: {
+          RequestHeader: {
+            Channel: 'PNP04-C001',
+            RequestDate: new Date().toISOString(),
+            MessageID: messageId,
+            ClientID:
+              stationCode || equipmentCode
+                ? `${stationCode}-${equipmentCode}`
+                : '12345',
+            Destination: {
+              ServiceName: 'ReverseServices',
+              ServiceOperation: 'reverseTransaction',
+              ServiceRegion: 'C001',
+              ServiceVersion: '1.0.0',
+            },
+          },
+          RequestBody: {
+            any: {
+              reversionRQ: {
+                phoneNumber: `${phoneNumber}`,
+                qrValue: `${value}`,
+                code: 'NIT_1',
+                type: 'payment',
+              },
+            },
+          },
+        },
       };
 
-      logEntry.requestPayload = requestPayload;
-      
-      // Registrar la cancelación
+      logEntry.requestPayload = body;
+
+      // Registrar la reversión
       logId = await this.transactionLogService.createTransactionLog(logEntry);
 
-      const response = await firstValueFrom(
-        this.httpService.post(url, {}, { headers })
-      );
-      
+      const response = await axios.post(url, body, {
+        headers,
+        timeout: +timeout,
+      });
       const processingTime = Date.now() - startTime;
 
-      // Actualizar el log de cancelación
-      await this.transactionLogService.updateTransactionLog(logId, {
-        responsePayload: response.data,
-        status: 'SUCCESS',
-        processingTimeMs: processingTime
-      });
+      if (!!response && response.status === 200 && response.data) {
+        const { data } = response;
+        const { StatusCode: statusCode = '', StatusDesc: statusDesc = '' } =
+          data.ResponseMessage.ResponseHeader.Status;
 
-      // También actualizar la transacción QR original como cancelada
-      if (parentTransactionId) {
-        await this.transactionLogService.updateTransactionLog(parentTransactionId, {
-          status: 'CANCELLED'
-        });
+        const updateData: Partial<TransactionLogEntry> = {
+          responsePayload: response.data,
+          nequiStatusCode: statusCode,
+          nequiStatusDescription: statusDesc,
+          processingTimeMs: processingTime,
+        };
+
+        if (statusCode === '0') {
+          updateData.status = 'SUCCESS';
+
+          this.logger.debug('Solicitud de reversion realizada correctamente');
+
+          // Actualizar la transacción original como revertida
+          if (parentTransactionId) {
+            await this.transactionLogService.updateTransactionLog(
+              parentTransactionId,
+              {
+                status: 'REVERSED',
+              },
+            );
+          }
+          await this.transactionLogService.updateTransactionLog(
+            logId,
+            updateData,
+          );
+          return ResponseHandler.success(response.data, 'Operación exitosa');
+        } else {
+          updateData.status = 'FAILED';
+          updateData.errorMessage = `Error ${statusCode} = ${statusDesc}`;
+
+          await this.transactionLogService.updateTransactionLog(
+            logId,
+            updateData,
+          );
+          return ResponseHandler.error(
+            `Error ${statusCode} = ${statusDesc}`,
+            'Unable to connect to Nequi, please check the information sent.',
+          );
+        }
+      } else {
+        const updateData: Partial<TransactionLogEntry> = {
+          status: 'FAILED',
+          errorMessage:
+            'Unable to connect to Nequi, please check the information sent.',
+          processingTimeMs: processingTime,
+        };
+
+        await this.transactionLogService.updateTransactionLog(
+          logId,
+          updateData,
+        );
+        return ResponseHandler.error(
+          `FAILED`,
+          'Unable to connect to Nequi, please check the information sent.',
+        );
       }
-
-      return response.data;
-
     } catch (error) {
       const processingTime = Date.now() - startTime;
-      
-      if (logId) {
+
+      if (logId || logId !== 0) {
         await this.transactionLogService.updateTransactionLog(logId, {
           status: 'FAILED',
           errorMessage: error.message,
-          processingTimeMs: processingTime
+          processingTimeMs: processingTime,
         });
       }
-      
-      throw error;
+      return ResponseHandler.error(
+        error,
+        'No se pudo realizar la reversión de la transacción a NEQUI',
+      );
     }
-  }
-
-  private generateMessageId(length = 10): string {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    for (let i = 0; i < length; i++) {
-      const rand = Math.floor(Math.random() * chars.length);
-      result += chars[rand];
-    }
-    return result;
   }
 }
-

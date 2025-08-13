@@ -4,10 +4,7 @@ import { HttpModule } from '@nestjs/axios';
 import { CommonModule } from '../common/common.module';
 
 @Module({
-  imports: [
-    HttpModule,
-    CommonModule
-  ],
+  imports: [HttpModule, CommonModule],
   providers: [AuthService],
   exports: [AuthService],
 })

@@ -7,7 +7,6 @@ import { DatabaseModule } from '../database/database.module';
   imports: [DatabaseModule],
   providers: [TransactionLogService],
   controllers: [TransactionLogController],
-  exports: [TransactionLogService]
+  exports: [TransactionLogService],
 })
 export class TransactionLogModule {}
-

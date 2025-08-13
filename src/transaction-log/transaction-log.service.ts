@@ -10,7 +10,13 @@ export interface TransactionLogEntry {
   phoneNumber?: string;
   amount?: string;
   currency?: string;
-  status: 'PENDING' | 'SUCCESS' | 'FAILED' | 'CANCELLED' | 'REVERSED' | 'TIMEOUT';
+  status:
+    | 'PENDING'
+    | 'SUCCESS'
+    | 'FAILED'
+    | 'CANCELLED'
+    | 'REVERSED'
+    | 'TIMEOUT';
   nequiStatusCode?: string;
   nequiStatusDescription?: string;
   errorMessage?: string;
@@ -58,7 +64,7 @@ export class TransactionLogService {
    */
   async createTransactionLog(entry: TransactionLogEntry): Promise<number> {
     const startTime = Date.now();
-    
+
     try {
       const query = `
         INSERT INTO transaction_tracking.transaction_log (
@@ -96,19 +102,24 @@ export class TransactionLogService {
         entry.parentTransactionId || null,
         entry.processingTimeMs || null,
         entry.retryCount || 0,
-        entry.environment || 'production'
+        entry.environment || 'production',
       ];
 
       const result = await this.databaseService.query(query, values);
       const logId = result.rows[0].id;
 
       const processingTime = Date.now() - startTime;
-      this.logger.debug(`Transaction log created with ID: ${logId} in ${processingTime}ms`);
+      this.logger.debug(
+        `Transaction log created with ID: ${logId} in ${processingTime}ms`,
+      );
 
       return logId;
     } catch (error) {
       const processingTime = Date.now() - startTime;
-      this.logger.error(`Error creating transaction log in ${processingTime}ms:`, error.message);
+      this.logger.error(
+        `Error creating transaction log in ${processingTime}ms:`,
+        error.message,
+      );
       throw new Error(`Failed to create transaction log: ${error.message}`);
     }
   }
@@ -116,7 +127,10 @@ export class TransactionLogService {
   /**
    * Actualiza un registro de transacción existente
    */
-  async updateTransactionLog(id: number, updates: Partial<TransactionLogEntry>): Promise<void> {
+  async updateTransactionLog(
+    id: number,
+    updates: Partial<TransactionLogEntry>,
+  ): Promise<void> {
     const startTime = Date.now();
 
     try {
@@ -157,7 +171,10 @@ export class TransactionLogService {
       this.logger.debug(`Transaction log ${id} updated in ${processingTime}ms`);
     } catch (error) {
       const processingTime = Date.now() - startTime;
-      this.logger.error(`Error updating transaction log ${id} in ${processingTime}ms:`, error.message);
+      this.logger.error(
+        `Error updating transaction log ${id} in ${processingTime}ms:`,
+        error.message,
+      );
       throw new Error(`Failed to update transaction log: ${error.message}`);
     }
   }
@@ -186,7 +203,9 @@ export class TransactionLogService {
   /**
    * Obtiene registros de transacción por message_id
    */
-  async getTransactionLogByMessageId(messageId: string): Promise<TransactionLogEntry | null> {
+  async getTransactionLogByMessageId(
+    messageId: string,
+  ): Promise<TransactionLogEntry | null> {
     try {
       const query = `
         SELECT * FROM transaction_tracking.transaction_log 
@@ -202,7 +221,10 @@ export class TransactionLogService {
 
       return this.mapRowToTransactionLog(result.rows[0]);
     } catch (error) {
-      this.logger.error(`Error getting transaction log by message ID ${messageId}:`, error.message);
+      this.logger.error(
+        `Error getting transaction log by message ID ${messageId}:`,
+        error.message,
+      );
       throw new Error(`Failed to get transaction log: ${error.message}`);
     }
   }
@@ -210,7 +232,9 @@ export class TransactionLogService {
   /**
    * Obtiene registros de transacción con filtros
    */
-  async getTransactionLogs(filter: TransactionLogFilter = {}): Promise<TransactionLogEntry[]> {
+  async getTransactionLogs(
+    filter: TransactionLogFilter = {},
+  ): Promise<TransactionLogEntry[]> {
     try {
       let query = `
         SELECT * FROM transaction_tracking.transaction_log
@@ -269,9 +293,8 @@ export class TransactionLogService {
         values.push(filter.offset);
         paramIndex++;
       }
-
       const result = await this.databaseService.query(query, values);
-      return result.rows.map(row => this.mapRowToTransactionLog(row));
+      return result.rows.map((row) => this.mapRowToTransactionLog(row));
     } catch (error) {
       this.logger.error('Error getting transaction logs:', error.message);
       throw new Error(`Failed to get transaction logs: ${error.message}`);
@@ -281,7 +304,10 @@ export class TransactionLogService {
   /**
    * Obtiene estadísticas de transacciones
    */
-  async getTransactionStats(dateFrom?: Date, dateTo?: Date): Promise<TransactionStats> {
+  async getTransactionStats(
+    dateFrom?: Date,
+    dateTo?: Date,
+  ): Promise<TransactionStats> {
     try {
       let query = `
         SELECT 
@@ -318,7 +344,7 @@ export class TransactionLogService {
         failedTransactions: parseInt(row.failed_transactions) || 0,
         pendingTransactions: parseInt(row.pending_transactions) || 0,
         averageProcessingTime: parseFloat(row.average_processing_time) || 0,
-        totalAmount: parseFloat(row.total_amount) || 0
+        totalAmount: parseFloat(row.total_amount) || 0,
       };
     } catch (error) {
       this.logger.error('Error getting transaction stats:', error.message);
@@ -332,14 +358,17 @@ export class TransactionLogService {
   async markAsTimeout(messageId: string): Promise<void> {
     await this.updateTransactionLogByMessageId(messageId, {
       status: 'TIMEOUT',
-      errorMessage: 'Transaction timed out waiting for response'
+      errorMessage: 'Transaction timed out waiting for response',
     });
   }
 
   /**
    * Actualiza un registro por message_id
    */
-  private async updateTransactionLogByMessageId(messageId: string, updates: Partial<TransactionLogEntry>): Promise<void> {
+  private async updateTransactionLogByMessageId(
+    messageId: string,
+    updates: Partial<TransactionLogEntry>,
+  ): Promise<void> {
     const log = await this.getTransactionLogByMessageId(messageId);
     if (log && log.id) {
       await this.updateTransactionLog(log.id, updates);
@@ -350,7 +379,7 @@ export class TransactionLogService {
    * Convierte camelCase a snake_case
    */
   private camelToSnakeCase(str: string): string {
-    return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+    return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
   }
 
   /**
@@ -380,8 +409,7 @@ export class TransactionLogService {
       parentTransactionId: row.parent_transaction_id,
       processingTimeMs: row.processing_time_ms,
       retryCount: row.retry_count,
-      environment: row.environment
+      environment: row.environment,
     };
   }
 }
-
