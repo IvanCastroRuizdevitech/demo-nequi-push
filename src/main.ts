@@ -7,7 +7,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');
   app.use(express.json({ limit: '100mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '100mb' }));  
+  app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
   const config = new DocumentBuilder()
     .setTitle('Implementación de Nequi')
@@ -16,9 +16,9 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  SwaggerModule.setup('docs', app, document);
 
-  console.log(`Servidor iniciado en el puerto ${Number(process.env.PORT)}`)
+  console.log(`Servidor iniciado en el puerto ${Number(process.env.PORT)}`);
 
   await app.listen(Number(process.env.PORT));
 }

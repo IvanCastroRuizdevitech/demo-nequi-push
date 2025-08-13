@@ -13,10 +13,9 @@ export class DatabaseService {
       database: process.env.DB_DATABASE,
       password: process.env.DB_PASSWORD, // Change this to match your setup
       port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 5432, // Default PostgreSQL port
-      ssl: process.env.DB_SSL === 'true'
-                  ? { rejectUnauthorized: false }
-                  : false,
-                  });
+      ssl:
+        process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+    });
   }
 
   async query(text: string, params?: any[]): Promise<any> {
@@ -24,7 +23,7 @@ export class DatabaseService {
     try {
       const result = await client.query(text, params);
       return result;
-    } catch (error){
+    } catch (error) {
       console.error('Error executing query:', error.message);
       throw error; // Rethrow the error to propagate it up the chain
     } finally {
@@ -36,4 +35,3 @@ export class DatabaseService {
     return await this.pool.connect();
   }
 }
-
